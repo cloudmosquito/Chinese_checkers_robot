@@ -3,6 +3,7 @@ from tkinter import messagebox
 import numpy as np
 import math
 from enum import Enum
+import queue
 
 # 坐标转换工具类
 def cartesian2Oblique(x, y):
@@ -76,6 +77,26 @@ class ChineseCheckersApp:
         self.valid_moves = []
         self.draw_board()
         self.canvas.bind("<Button-1>", self.handle_click)
+        self.valid_positions = {
+        -8: [4],
+        -7: [3, 4],
+        -6: [2, 3, 4],
+        -5: [1, 2, 3, 4],
+        -4: list(range(-4, 9)),
+        -3: list(range(-4, 8)),
+        -2: list(range(-4, 7)),
+        -1: list(range(-4, 6)),
+         0: list(range(-4, 5)),
+         1: list(range(-5, 5)),
+         2: list(range(-6, 5)),
+         3: list(range(-7, 5)),
+         4: list(range(-8, 5)),
+         5: [-4, -3, -2, -1],
+         6: [-4, -3, -2],
+         7: [-4, -3],
+         8: [-4]
+    }
+
         
     def create_chinese_checkers_board(self):
         """创建初始棋盘，使用斜坐标系标记点。"""
@@ -135,6 +156,105 @@ class ChineseCheckersApp:
         self.draw_board()
         self.toggle_turn()
 
+    # 是否满足跳棋跳动规则：平行x轴线上
+    def judge_x(self, q, r, temp_q):
+
+        judge=True
+        # 中间点在棋盘可行域上
+        judge=  temp_q in self.valid_positions.get([], r)
+        # 中间点不为空
+        if self.board[(temp_q, r)]==0:
+            judge=False
+        # 起点与中间点之间全为空
+        for dq in range(q, temp_q):
+           if self.board[(dq, r)]!=0:
+              judge=False
+              break
+        # 终点在棋盘可行域上
+        judge=  2*temp_q-q in self.valid_positions.get([], r)
+        # 终点与中间点之间全为空
+        for dq in range(temp_q, 2*temp_q-q):
+           if self.board[(dq, r)]!=0:
+              judge=False
+              break
+        if judge:
+           final_q=2*temp_q-q
+           return [final_q,r]
+    
+    # 是否满足跳棋跳动规则：平行y轴线上
+    def judge_y(self, q, r, temp_r):
+
+        judge=True
+        # 中间点在棋盘可行域上
+        judge=  temp_r in self.valid_positions.get(q, [])
+        # 中间点不为空
+        if self.board[(q, temp_r)]==0:
+            judge=False
+        # 起点与中间点之间全为空
+        for dr in range(r, temp_r):
+           if self.board[(q, dr)]!=0:
+              judge=False
+              break
+        # 终点在棋盘可行域上
+        judge=  2*temp_r-r in self.valid_positions.get(q, [])
+        # 终点与中间点之间全为空
+        for dq in range(temp_r, 2*temp_r-r):
+           if self.board[(q, dr)]!=0:
+              judge=False
+              break
+        if judge:
+           final_r=2*temp_r-r
+           return [q,final_r]
+            
+    # 是否满足跳棋跳动规则：平行|x-y|轴线上
+    def judge_y(self, q, r, temp_q, temp_r):
+
+        judge=True
+        # 中间点在棋盘可行域上
+        judge=  temp_q in self.valid_positions.get([], temp_r)
+        judge=  temp_r in self.valid_positions.get(temp_q, [])
+        # 中间点在平行|x-y|轴线上
+        if q+r!=temp_q+temp_r:
+           judge=False
+        # 中间点不为空
+        if self.board[(temp_q, temp_r)]==0:
+            judge=False
+        # 起点与中间点之间全为空
+        for dr in range(r, temp_r):
+           if self.board[(q+r-dr, dr)]!=0:
+              judge=False
+        # 终点在棋盘可行域上
+        judge=  2*temp_q-r in self.valid_positions.get([], r)
+        judge=  2*temp_r-r in self.valid_positions.get(q, [])
+        # 终点与中间点之间全为空
+        for dq in range(temp_r, 2*temp_r-r):
+           if self.board[(q, dr)]!=0:
+              judge=False
+        if judge:
+           final_q=2*temp_q-q
+           final_r=2*temp_r-r
+           return [final_q,final_r]          
+
+    # 搜索：移动，跳动，返回所有可行点
+    def get_valid_moves_by_bfs(self, q, r,):
+        moves = []
+        # 移动一次
+        directions = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)]
+        for dq, dr in directions:
+            nq, nr = q + dq, r + dr
+            if isValidOblique(nq, nr) and self.board.get((nq, nr), 1) == 0:
+                moves.append((nq, nr))
+        
+        temp_q in self.valid_positions.get([], r)
+
+        temp_r in self.valid_positions.get(q, [])
+
+        
+
+
+        return moves
+    
+    
     def get_valid_moves(self, q, r):
         moves = []
         directions = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)]
