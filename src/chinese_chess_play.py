@@ -64,6 +64,7 @@ def isValidInitOblique(player, q, r):
 class ChineseCheckersApp:
     class Turn(Enum):
       PLAYER_TURN = 1
+      WAITING_TURN  = 0
       AI_TURN = -1
     def __init__(self, master):
         self.current_turn = ChineseCheckersApp.Turn.PLAYER_TURN
@@ -106,9 +107,9 @@ class ChineseCheckersApp:
             color = "white" if value == 0 else ("red" if value == 1 else "black")
             self.canvas.create_oval(screen_x - 15, screen_y - 15, screen_x + 15, screen_y + 15, fill=color)
         print(self.current_turn)
+        
     def handle_click(self, event):
         if self.current_turn == ChineseCheckersApp.Turn.AI_TURN:
-            print(self.current_turn)
             return
         # 将点击位置转换为斜坐标
         clicked_x = (event.x - 300) / 40
@@ -117,11 +118,13 @@ class ChineseCheckersApp:
 
         # 第二次选择
         if self.selected_piece:
-            if (q, r) in self.valid_moves:  # 第二次选择正确
+            if (q, r) in self.valid_moves:  # 第二次选择为可行落子点
                 self.move_piece(self.selected_piece, (q, r))
                 self.current_turn = ChineseCheckersApp.Turn.AI_TURN
                 self.selected_piece = None
                 self.valid_moves = []
+            # 第二次选择为另一颗棋子
+                pass
             else :
               # 第二次选择错误
               self.current_turn = ChineseCheckersApp.Turn.WAITING_TURN
@@ -130,10 +133,8 @@ class ChineseCheckersApp:
             if self.board.get((q, r), 0) != 0:  # 第一次选择正确
                 self.selected_piece = (q, r)
                 self.valid_moves = self.get_valid_moves(q, r)
-                self.current_turn = ChineseCheckersApp.Turn.AI_TURN
-            self.current_turn = ChineseCheckersApp.Turn.WAITING_TURN
+                self.current_turn = ChineseCheckersApp.Turn.WAITING_TURN
         self.draw_board()
-        self.toggle_turn()
 
     def get_valid_moves(self, q, r):
         moves = []
@@ -144,7 +145,7 @@ class ChineseCheckersApp:
                 moves.append((nq, nr))
         return moves
 
-    def move_piece(self, end, begin):
+    def move_piece(self, begin, end):
         self.board[end] = self.board[begin]
         self.board[begin] = 0
 
@@ -155,13 +156,9 @@ class ChineseCheckersApp:
             start, end = moves[0]
             self.move_piece(start, end)
         self.draw_board()
-        self.toggle_turn()
-
-    def toggle_turn(self):
-        if self.current_turn == ChineseCheckersApp.Turn.PLAYER_TURN:
-            self.current_turn = ChineseCheckersApp.Turn.AI_TURN
-        else:
-            self.current_turn = ChineseCheckersApp.Turn.PLAYER_TURN
+        self.current_turn = ChineseCheckersApp.Turn.PLAYER_TURN
+        
+        
 if __name__ == "__main__":
     root = tk.Tk()
     app = ChineseCheckersApp(root)
