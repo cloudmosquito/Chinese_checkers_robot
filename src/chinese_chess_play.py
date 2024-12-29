@@ -63,21 +63,31 @@ def isValidInitOblique(player, q, r):
 # 创建棋盘
 class ChineseCheckersApp:
     class Turn(Enum):
-        PLAYER_TURN = 1
-        WAITING_TURN = 0
+        PLAYER1_TURN = 0
+        PLAYER2_TURN = 1
+        WAITING1_TURN = 2
+        WAITING2_TURN = 3
         AI_TURN = -1
-
-    def __init__(self, master):
-        self.current_turn = ChineseCheckersApp.Turn.PLAYER_TURN
+    class GameMode(Enum):
+        PVP = 0
+        PVE = 1
+    
+    def __init__(self, master, game_mode=GameMode.PVE):
+        self.game_mode = game_mode
+        self.current_turn = ChineseCheckersApp.Turn.PLAYER1_TURN
+        self.selected_piece = None
+        self.valid_moves = []
+        
         self.master = master
         self.master.title("Chinese Checkers")
         self.board = self.create_chinese_checkers_board()
         self.canvas = tk.Canvas(self.master, width=600, height=600)
         self.canvas.pack()
-        self.selected_piece = None
-        self.valid_moves = []
+        # 用于指示当前轮次的圆圈
+        self.turn_indicator = self.canvas.create_oval(550, 10, 590, 50, fill="red")
         self.draw_board()
         self.canvas.bind("<Button-1>", self.handle_click)
+         
 
     def create_chinese_checkers_board(self):
         """创建初始棋盘，使用斜坐标系标记点。"""
@@ -101,6 +111,12 @@ class ChineseCheckersApp:
 
     def draw_board(self):
         self.canvas.delete("all")
+        
+        # 重新绘制轮次指示圆圈
+        color = "red" if (self.current_turn == ChineseCheckersApp.Turn.PLAYER1_TURN \
+            or self.current_turn == ChineseCheckersApp.Turn.WAITING1_TURN) else "blue"
+        self.canvas.create_oval(555, 15, 585, 45, fill=color)
+        
         for (q, r), value in self.board.items():
             x, y = oblique2Cartesian(q, r)
             screen_x = 300 + x * 40
@@ -112,9 +128,10 @@ class ChineseCheckersApp:
                 # 选中棋子：用小圆点高亮
                 self.canvas.create_oval(screen_x - 5, screen_y - 5, screen_x + 5, screen_y + 5, fill="yellow")
             elif (q, r) in self.valid_moves:
+                color = "red" if self.current_turn == ChineseCheckersApp.Turn.PLAYER1_TURN else "blue"
                 self.canvas.create_rectangle(
                     screen_x - 20, screen_y - 20, screen_x + 20, screen_y + 20,
-                    outline="red", width=2, dash=(4, 2)
+                    outline=color, width=2, dash=(4, 2)
                 )
 
     def handle_click(self, event):
@@ -133,16 +150,16 @@ class ChineseCheckersApp:
             # 第二次点击：尝试移动或更换选中的棋子
             if (q, r) in self.valid_moves:  # 有效移动
                 self.move_piece(self.selected_piece, (q, r))
-                self.current_turn = ChineseCheckersApp.Turn.AI_TURN
+                self.toggleTurn()
                 self.selected_piece = None
                 self.valid_moves = []
-            elif self.board.get((q, r), 0) == (1 if self.current_turn == ChineseCheckersApp.Turn.PLAYER_TURN else -1):
+            elif self.board.get((q, r), 0) == (1 if self.current_turn == ChineseCheckersApp.Turn.PLAYER1_TURN else -1):
                 # 更换选中的棋子
                 self.selected_piece = (q, r)
                 self.valid_moves = self.get_valid_moves(q, r)
         else:
             # 第一次点击：选择棋子
-            if self.board.get((q, r), 0) == (1 if self.current_turn == ChineseCheckersApp.Turn.PLAYER_TURN else -1):
+            if self.board.get((q, r), 0) == (1 if self.current_turn == ChineseCheckersApp.Turn.PLAYER1_TURN else -1):
                 self.selected_piece = (q, r)
                 self.valid_moves = self.get_valid_moves(q, r)
 
@@ -168,10 +185,21 @@ class ChineseCheckersApp:
             start, end = moves[0]
             self.move_piece(start, end)
         self.draw_board()
-        self.current_turn = ChineseCheckersApp.Turn.PLAYER_TURN
-
+        self.toggleTurn()
+    
+    def toggleTurn(self):
+        if self.game_mode == ChineseCheckersApp.GameMode.PVE:
+            if self.current_turn == ChineseCheckersApp.Turn.PLAYER1_TURN:
+                self.current_turn = ChineseCheckersApp.Turn.AI_TURN
+            else :
+                self.current_turn = ChineseCheckersApp.Turn.PLAYER1_TURN
+        else :
+            if self.current_turn == ChineseCheckersApp.Turn.PLAYER1_TURN:
+                self.current_turn = ChineseCheckersApp.Turn.PLAYER2_TURN
+            else :
+                self.current_turn = ChineseCheckersApp.Turn.PLAYER1_TURN
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = ChineseCheckersApp(root)
+    app = ChineseCheckersApp(root, ChineseCheckersApp.GameMode.PVP)
     root.mainloop()
