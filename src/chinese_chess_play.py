@@ -1,6 +1,5 @@
 import tkinter as tk
 from tkinter import messagebox
-import numpy as np
 import math
 from enum import Enum
 import queue
@@ -43,38 +42,50 @@ def isValidOblique(q, r):
     return r in valid_positions.get(q, [])
 
 def isValidInitOblique(player, q, r):
-  valid_init_oblique_1 = {
-    1: [-5],
-    2: [-6, -5],
-    3: [-7, -6, -5],
-    4: [-8, -7, -6, -5],
-  }
-  valid_init_oblique_2 = {
-    -4: [5, 6, 7, 8],
-    -3: [5, 6, 7],
-    -2: [5, 6],
-    -1: [5],
-  }
-  if player == 1:
-    return r in valid_init_oblique_1.get(q, [])
-  elif player == -1:
-    return r in valid_init_oblique_2.get(q, [])
-  else :
-    return False
+    valid_init_oblique_1 = {
+        1: [-5],
+        2: [-6, -5],
+        3: [-7, -6, -5],
+        4: [-8, -7, -6, -5],
+    }
+    valid_init_oblique_2 = {
+        -4: [5, 6, 7, 8],
+        -3: [5, 6, 7],
+        -2: [5, 6],
+        -1: [5],
+    }
+    if player == 1:
+        return r in valid_init_oblique_1.get(q, [])
+    elif player == -1:
+        return r in valid_init_oblique_2.get(q, [])
+    else:
+        return False
+
 # 创建棋盘
 class ChineseCheckersApp:
     class Turn(Enum):
-      PLAYER_TURN = 1
-      AI_TURN = -1
-    def __init__(self, master):
-        self.current_turn = ChineseCheckersApp.Turn.PLAYER_TURN
+        PLAYER1_TURN = 0
+        PLAYER2_TURN = 1
+        WAITING1_TURN = 2
+        WAITING2_TURN = 3
+        AI_TURN = -1
+    class GameMode(Enum):
+        PVP = 0
+        PVE = 1
+    
+    def __init__(self, master, game_mode=GameMode.PVE):
+        self.game_mode = game_mode
+        self.current_turn = ChineseCheckersApp.Turn.PLAYER1_TURN
+        self.selected_piece = None
+        self.valid_moves = []
+        
         self.master = master
         self.master.title("Chinese Checkers")
         self.board = self.create_chinese_checkers_board()
         self.canvas = tk.Canvas(self.master, width=600, height=600)
         self.canvas.pack()
-        self.selected_piece = None
-        self.valid_moves = []
+        # 用于指示当前轮次的圆圈
+        self.turn_indicator = self.canvas.create_oval(550, 10, 590, 50, fill="red")
         self.draw_board()
         self.canvas.bind("<Button-1>", self.handle_click)
         self.valid_positions = {
@@ -108,53 +119,71 @@ class ChineseCheckersApp:
 
         # 初始化玩家棋子
         for q in range(-8, 9):
-          for r in range(-8, 9):
-            if isValidInitOblique(1, q, r):
-              board[(q, r)] = 1 # 玩家1
+            for r in range(-8, 9):
+                if isValidInitOblique(1, q, r):
+                    board[(q, r)] = 1  # 玩家 1
 
         for q in range(-8, 9):
-          for r in range(-8, 9):
-            if isValidInitOblique(-1, q, r):
-              board[(q, r)] = -1 # 玩家2
+            for r in range(-8, 9):
+                if isValidInitOblique(-1, q, r):
+                    board[(q, r)] = -1  # 玩家 2
         return board
 
     def draw_board(self):
         self.canvas.delete("all")
+        
+        # 重新绘制轮次指示圆圈
+        color = "red" if (self.current_turn == ChineseCheckersApp.Turn.PLAYER1_TURN \
+            or self.current_turn == ChineseCheckersApp.Turn.WAITING1_TURN) else "blue"
+        self.canvas.create_oval(555, 15, 585, 45, fill=color)
+        
         for (q, r), value in self.board.items():
             x, y = oblique2Cartesian(q, r)
             screen_x = 300 + x * 40
             screen_y = 300 - y * 40
-            color = "white" if value == 0 else ("red" if value == 1 else "black")
+            color = "white" if value == 0 else ("red" if value == 1 else "blue")
             self.canvas.create_oval(screen_x - 15, screen_y - 15, screen_x + 15, screen_y + 15, fill=color)
-        print(self.current_turn)
+            
+            if self.selected_piece == (q, r):
+                # 选中棋子：用小圆点高亮
+                self.canvas.create_oval(screen_x - 5, screen_y - 5, screen_x + 5, screen_y + 5, fill="yellow")
+            elif (q, r) in self.valid_moves:
+                color = "red" if self.current_turn == ChineseCheckersApp.Turn.PLAYER1_TURN else "blue"
+                self.canvas.create_rectangle(
+                    screen_x - 20, screen_y - 20, screen_x + 20, screen_y + 20,
+                    outline=color, width=2, dash=(4, 2)
+                )
+
     def handle_click(self, event):
+        
+        print(self.current_turn)
+        
+        # 若当前是AI回合，屏蔽鼠标点击响应
         if self.current_turn == ChineseCheckersApp.Turn.AI_TURN:
-            print(self.current_turn)
             return
-        # 将点击位置转换为斜坐标
+
         clicked_x = (event.x - 300) / 40
         clicked_y = (300 - event.y) / 40
         q, r = cartesian2Oblique(clicked_x, clicked_y)
 
-        # 第二次选择
         if self.selected_piece:
-            if (q, r) in self.valid_moves:  # 第二次选择正确
+            # 第二次点击：尝试移动或更换选中的棋子
+            if (q, r) in self.valid_moves:  # 有效移动
                 self.move_piece(self.selected_piece, (q, r))
-                self.current_turn = ChineseCheckersApp.Turn.AI_TURN
+                self.toggleTurn()
                 self.selected_piece = None
                 self.valid_moves = []
-            else :
-              # 第二次选择错误
-              self.current_turn = ChineseCheckersApp.Turn.WAITING_TURN
-        # 第一次选择
-        else:
-            if self.board.get((q, r), 0) != 0:  # 第一次选择正确
+            elif self.board.get((q, r), 0) == (1 if self.current_turn == ChineseCheckersApp.Turn.PLAYER1_TURN else -1):
+                # 更换选中的棋子
                 self.selected_piece = (q, r)
                 self.valid_moves = self.get_valid_moves(q, r)
-                self.current_turn = ChineseCheckersApp.Turn.AI_TURN
-            self.current_turn = ChineseCheckersApp.Turn.WAITING_TURN
+        else:
+            # 第一次点击：选择棋子
+            if self.board.get((q, r), 0) == (1 if self.current_turn == ChineseCheckersApp.Turn.PLAYER1_TURN else -1):
+                self.selected_piece = (q, r)
+                self.valid_moves = self.get_valid_moves(q, r)
+
         self.draw_board()
-        self.toggle_turn()
 
     # 是否满足跳棋跳动规则：平行x轴线上
     def judge_x(self, q, r, temp_q):
@@ -260,11 +289,11 @@ class ChineseCheckersApp:
         directions = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)]
         for dq, dr in directions:
             nq, nr = q + dq, r + dr
-            if isValidOblique(nq, nr) and self.board.get((nq, nr), 1) == 0:
+            if isValidOblique(nq, nr) and self.board.get((nq, nr), 0) == 0:
                 moves.append((nq, nr))
         return moves
 
-    def move_piece(self, end, begin):
+    def move_piece(self, begin, end):
         self.board[end] = self.board[begin]
         self.board[begin] = 0
 
@@ -275,14 +304,21 @@ class ChineseCheckersApp:
             start, end = moves[0]
             self.move_piece(start, end)
         self.draw_board()
-        self.toggle_turn()
+        self.toggleTurn()
+    
+    def toggleTurn(self):
+        if self.game_mode == ChineseCheckersApp.GameMode.PVE:
+            if self.current_turn == ChineseCheckersApp.Turn.PLAYER1_TURN:
+                self.current_turn = ChineseCheckersApp.Turn.AI_TURN
+            else :
+                self.current_turn = ChineseCheckersApp.Turn.PLAYER1_TURN
+        else :
+            if self.current_turn == ChineseCheckersApp.Turn.PLAYER1_TURN:
+                self.current_turn = ChineseCheckersApp.Turn.PLAYER2_TURN
+            else :
+                self.current_turn = ChineseCheckersApp.Turn.PLAYER1_TURN
 
-    def toggle_turn(self):
-        if self.current_turn == ChineseCheckersApp.Turn.PLAYER_TURN:
-            self.current_turn = ChineseCheckersApp.Turn.AI_TURN
-        else:
-            self.current_turn = ChineseCheckersApp.Turn.PLAYER_TURN
 if __name__ == "__main__":
     root = tk.Tk()
-    app = ChineseCheckersApp(root)
+    app = ChineseCheckersApp(root, ChineseCheckersApp.GameMode.PVP)
     root.mainloop()
