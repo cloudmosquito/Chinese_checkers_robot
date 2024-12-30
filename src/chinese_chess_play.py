@@ -204,104 +204,120 @@ class ChineseCheckersApp:
  
 
     # 满足跳棋跳动规则：平行x轴线上
-    def find_judge_x(self, q, r):
-
+    def find_valid_pos_on_0_axis(self, q, r):
         moves_q=[]
-
         for temp_q in self.r_valid_positions.get(r,[]):
-            judge=True
-
+            is_mid_q_valid_ = True
+            is_end_q_valid = True
+            
             if temp_q != q:
+                
+                # 判断当前temq 是否为合法中间点
                 # 中间点不为空
                 if self.board[(temp_q, r)] == 0:
-                    judge = False
-                # 起点与中间点之间全为空
-                if judge:
+                    continue
+                else:
                     for dq in create_array_exclude_both(q, temp_q):
                         if self.board[(dq, r)] != 0:
-                            judge=False
-              
-                # 终点在棋盘可行域上
-                judge=  2*temp_q-q in self.q_valid_positions.get(r,[])
-                # 终点与中间点之间全为空
-                if judge:
-                    for dq in create_array_exclude_both(temp_q, 2*temp_q-q):
-                        if self.board[(dq, r)]!=0:
-                            judge=False
+                            is_mid_q_valid_ = False
+                            break
+                    if not is_mid_q_valid_:
+                        continue
                 
-                if judge:
-                    final_q=2*temp_q-q
-                    moves_q.append((final_q, r))
+                # 终点在棋盘可行域上
+                is_end_on_blank_board =  ((2*temp_q-q) in self.q_valid_positions.get(r,[])\
+                    and self.board[(2*temp_q-q, r)] == 0)
+                if not is_end_on_blank_board:
+                    continue
+                
+                # 终点与中间点之间全为空
+                for dq in create_array_exclude_both(temp_q, 2*temp_q-q):
+                    if self.board[(dq, r)] != 0:
+                        is_end_q_valid = False
+                
+                if is_end_q_valid:
+                    moves_q.append((2*temp_q - q, r))
         
         return moves_q
     
     # 满足跳棋跳动规则：平行y轴线上
-    def find_judge_y(self, q, r):
+    def find_valid_pos_on_60_axis(self, q, r):
         
         moves_r=[]
 
         for temp_r in self.q_valid_positions.get(q, []):
-            judge=True
-
+            is_mid_r_valid_ = True
+            is_end_r_valid = True
+            
             if temp_r != r:
                 # 中间点不为空
                 if self.board[(q, temp_r)] == 0:
-                    judge = False
+                    continue
                 # 起点与中间点之间全为空
-                if judge:
+                else:
                     for dr in create_array_exclude_both(r, temp_r):
                         if self.board[(q, dr)] != 0:
-                            judge=False
-              
+                            is_mid_r_valid_ = False
+                            break
+                    if not is_mid_r_valid_:
+                        continue
+                    
                 # 终点在棋盘可行域上
-                judge=  2*temp_r-r in self.q_valid_positions.get(q, [])
+                is_end_on_blank_board =  ((2*temp_r-r) in self.q_valid_positions.get(q, []) \
+                    and self.board[(q, 2*temp_r-r)] == 0)
+                if not is_end_on_blank_board:
+                    continue
+                
                 # 终点与中间点之间全为空
-                if judge:
-                    for dr in create_array_exclude_both(temp_r, 2*temp_r-r):
-                        if self.board[(q, dr)]!=0:
-                            judge=False
-                if judge:
-                    final_r=2*temp_r-r
-                    moves_r.append((q, final_r))
-        
+                for dr in create_array_exclude_both(temp_r, 2*temp_r-r):
+                    if self.board[(q, dr)] != 0:
+                        is_end_r_valid = False
+                if is_end_r_valid:
+                    moves_r.append((q, 2*temp_r-r))
         return moves_r
  
 
     # 满足跳棋跳动规则：平行|x-y|轴线上
-    def find_judge_x_minus_y(self, q, r):
+    def find_valid_pos_on_120_axis(self, q, r):
 
         moves_q_r=[]
 
         for (temp_q, temp_r) in self.data_q_plus_r.get(q + r, []):
+            print(f"temp_q, temp_r:{temp_q, temp_r}")
             
-            judge=True
+            is_mid_valid = True
+            is_end_valid = True
 
             if temp_r != r:
                 # 中间点不为空
                 if self.board[(temp_q, temp_r)] == 0:
-                    judge = False
+                    continue
                 # 起点与中间点之间全为空
-                if judge:
+                else :
                     for dr in create_array_exclude_both(r, temp_r):
                         if self.board[(q + r - dr, dr)] != 0:
-                            judge=False
+                            is_mid_valid = False
+                            break
+                    if not is_mid_valid:
+                        continue
               
                 # 终点在棋盘可行域上
-                judge=  (2*temp_q-q, 2*temp_r-r) in self.data_q_plus_r.get(q + r , [])
+                is_end_on_blank_board = ((2*temp_q-q, 2*temp_r-r) in self.data_q_plus_r.get(q + r , []) \
+                    and self.board[(2*temp_q-q, 2*temp_r-r)] == 0)
+                if not is_end_on_blank_board:
+                    continue
+                
                 # 终点与中间点之间全为空
-                if judge:
-                    for dr in create_array_exclude_both(temp_r, 2*temp_r-r):
-                        if self.board[(q + r - dr , dr)]!=0:
-                            judge=False
-                if judge:
-                    final_q=2*temp_q-q
-                    final_r=2*temp_r-r
-                    moves_q_r.append((final_q, final_r))
+                for dr in create_array_exclude_both(temp_r, 2*temp_r-r):
+                    if self.board[(q + r - dr , dr)]!=0:
+                        is_end_valid = False
+                if is_end_valid:
+                    moves_q_r.append((2*temp_q-q, 2*temp_r-r))
         
         return moves_q_r          
 
     # 搜索：移动，跳动，返回所有可行点
-    def get_valid_moves_by_bfs(self, q, r,):
+    def get_valid_moves_by_bfs(self, q, r):
         moves = []
         # 移动一次
         directions = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)]
@@ -311,30 +327,34 @@ class ChineseCheckersApp:
                 moves.append((nq, nr))        
 
         # 初始化队列，并将起始节点添加到队列中
-        queue = deque([(q, r)])
+        queue = deque()
+        queue.append((q,r))
         # 使用一个集合来记录访问过的节点
         visited = []
+        is_first_handled = False
         while queue:
             # 取出队列中的第一个路径:当前节点
             now = queue.popleft()
 
-            # 如果该节点未被访问过，继续搜索
-            if now not in visited:
-                # 将该节点标记为已访问
+            # 将该节点标记为已访问
+            if not is_first_handled:
+                is_first_handled = True
+            elif not now in visited :
                 visited.append(now)
-                # 扩展路径并将新的路径加入队列
-                graph=[]
-                graph.append(self.find_judge_x (q, r))
-                graph.append(self.find_judge_y(q, r))
-                graph.append(self.find_judge_x_minus_y(q, r))
-                if graph == None:
-                    break
-                for neighbor in graph:
-                    if neighbor not in visited:
-                        visited.append(neighbor)
-                        queue.append(neighbor)
-         
-        moves.append(visited)
+            # 扩展路径并将新的路径加入队列
+            graph=[]
+            graph.extend((q,r) for (q,r) in self.find_valid_pos_on_0_axis(now[0], now[1]))
+            graph.extend((q,r) for (q,r) in self.find_valid_pos_on_60_axis(now[0], now[1]))
+            graph.extend((q,r) for (q,r) in self.find_valid_pos_on_120_axis(now[0], now[1]))
+
+            if graph == None:
+                break
+            for neighbor in graph:
+                if neighbor not in visited:
+                    print(f"neighbor:{neighbor}")
+                    queue.append(neighbor)
+            print(f"queue:{queue}")
+        moves.extend((q,r) for (q,r) in visited) 
         return moves
     
     
