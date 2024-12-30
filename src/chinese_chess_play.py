@@ -88,27 +88,34 @@ class ChineseCheckersApp:
         self.turn_indicator = self.canvas.create_oval(550, 10, 590, 50, fill="red")
         self.draw_board()
         self.canvas.bind("<Button-1>", self.handle_click)
-        self.valid_positions = {
-        -8: [4],
-        -7: [3, 4],
-        -6: [2, 3, 4],
-        -5: [1, 2, 3, 4],
-        -4: list(range(-4, 9)),
-        -3: list(range(-4, 8)),
-        -2: list(range(-4, 7)),
-        -1: list(range(-4, 6)),
-         0: list(range(-4, 5)),
-         1: list(range(-5, 5)),
-         2: list(range(-6, 5)),
-         3: list(range(-7, 5)),
-         4: list(range(-8, 5)),
-         5: [-4, -3, -2, -1],
-         6: [-4, -3, -2],
-         7: [-4, -3],
-         8: [-4]
-    }
+        self.q_valid_positions = {
+            -8: [4],
+            -7: [3, 4],
+            -6: [2, 3, 4],
+            -5: [1, 2, 3, 4],
+            -4: list(range(-4, 9)),
+            -3: list(range(-4, 8)),
+            -2: list(range(-4, 7)),
+            -1: list(range(-4, 6)),
+             0: list(range(-4, 5)),
+             1: list(range(-5, 5)),
+             2: list(range(-6, 5)),
+             3: list(range(-7, 5)),
+             4: list(range(-8, 5)),
+             5: [-4, -3, -2, -1],
+             6: [-4, -3, -2],
+             7: [-4, -3],
+             8: [-4]
+        }
+        self.r_valid_positions = {
+            r: [q for q, rs in self.q_valid_positions.items() if r in rs] \
+            for r in range(-8, 9)
+        }
+        self.data_q_plus_r = {
+            k: [(q, k - q) for q in range(-8, 9) if k - q in self.r_valid_positions.get(q, [])] \
+                for k in range(-8, 9)
+        }
 
-        
     def create_chinese_checkers_board(self):
         """创建初始棋盘，使用斜坐标系标记点。"""
         board = {}
@@ -217,11 +224,11 @@ class ChineseCheckersApp:
         # 中间点在棋盘可行域上
         judge=  temp_r in self.valid_positions.get(q, [])
         # 中间点不为空
-        if self.board[(q, temp_r)]==0:
-            judge=False
+        if self.board[(q, temp_r)] == 0:
+            judge = False
         # 起点与中间点之间全为空
         for dr in range(r, temp_r):
-           if self.board[(q, dr)]!=0:
+           if self.board[(q, dr)] != 0:
               judge=False
               break
         # 终点在棋盘可行域上
@@ -238,30 +245,30 @@ class ChineseCheckersApp:
     # 是否满足跳棋跳动规则：平行|x-y|轴线上
     def judge_y(self, q, r, temp_q, temp_r):
 
-        judge=True
+        judge = True
         # 中间点在棋盘可行域上
-        judge=  temp_q in self.valid_positions.get([], temp_r)
-        judge=  temp_r in self.valid_positions.get(temp_q, [])
+        judge =  temp_q in self.valid_positions.get([], temp_r)
+        judge =  temp_r in self.valid_positions.get(temp_q, [])
         # 中间点在平行|x-y|轴线上
-        if q+r!=temp_q+temp_r:
-           judge=False
+        if q + r != temp_q + temp_r:
+           judge = False
         # 中间点不为空
-        if self.board[(temp_q, temp_r)]==0:
-            judge=False
+        if self.board[(temp_q, temp_r)] == 0:
+            judge = False
         # 起点与中间点之间全为空
         for dr in range(r, temp_r):
-           if self.board[(q+r-dr, dr)]!=0:
+           if self.board[(q + r - dr, dr)] != 0:
               judge=False
         # 终点在棋盘可行域上
-        judge=  2*temp_q-r in self.valid_positions.get([], r)
-        judge=  2*temp_r-r in self.valid_positions.get(q, [])
+        judge =  2 * temp_q-r in self.valid_positions.get([], r)
+        judge =  2 * temp_r-r in self.valid_positions.get(q, [])
         # 终点与中间点之间全为空
         for dq in range(temp_r, 2*temp_r-r):
            if self.board[(q, dr)]!=0:
               judge=False
         if judge:
-           final_q=2*temp_q-q
-           final_r=2*temp_r-r
+           final_q = 2 * temp_q - q
+           final_r = 2 * temp_r - r
            return [final_q,final_r]          
 
     # 搜索：移动，跳动，返回所有可行点
