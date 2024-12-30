@@ -311,22 +311,17 @@ class ChineseCheckersApp:
                 moves.append((nq, nr))        
 
         # 初始化队列，并将起始节点添加到队列中
-        queue = deque((q, r))
+        queue = deque([(q, r)])
         # 使用一个集合来记录访问过的节点
-        visited = set[(q, r)]
-
+        visited = []
         while queue:
-            # 取出队列中的第一个路径
-            path = queue.popleft()
-            # 获取路径的最后一个节点
-            node = path[-1]
-
-            node
+            # 取出队列中的第一个路径:当前节点
+            now = queue.popleft()
 
             # 如果该节点未被访问过，继续搜索
-            if node not in visited:
+            if now not in visited:
                 # 将该节点标记为已访问
-                visited.add(tuple(node))
+                visited.append(now)
                 # 扩展路径并将新的路径加入队列
                 graph=[]
                 graph.append(self.find_judge_x (q, r))
@@ -336,7 +331,7 @@ class ChineseCheckersApp:
                     break
                 for neighbor in graph:
                     if neighbor not in visited:
-                        path.append(neighbor)
+                        visited.append(neighbor)
                         queue.append(neighbor)
          
         moves.append(visited)
