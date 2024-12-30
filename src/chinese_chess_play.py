@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import messagebox
 import math
 from enum import Enum
-import queue
+from collections import deque
 
 # 坐标转换工具类
 def cartesian2Oblique(x, y):
@@ -60,6 +60,15 @@ def isValidInitOblique(player, q, r):
         return r in valid_init_oblique_2.get(q, [])
     else:
         return False
+
+#生成数组[a+1,a+2~,b-2,b-1]
+def create_array_exclude_both(a, b):
+        
+    if a > b:
+        a, b = b, a
+
+    return list(range( a + 1 , b))  
+
 
 # 创建棋盘
 class ChineseCheckersApp:
@@ -183,93 +192,113 @@ class ChineseCheckersApp:
             elif self.board.get((q, r), 0) == (1 if self.current_turn == ChineseCheckersApp.Turn.PLAYER1_TURN else -1):
                 # 更换选中的棋子
                 self.selected_piece = (q, r)
-                self.valid_moves = self.get_valid_moves(q, r)
+                self.valid_moves = self.get_valid_moves_by_bfs(q, r)
         else:
             # 第一次点击：选择棋子
             if self.board.get((q, r), 0) == (1 if self.current_turn == ChineseCheckersApp.Turn.PLAYER1_TURN else -1):
                 self.selected_piece = (q, r)
-                self.valid_moves = self.get_valid_moves(q, r)
+                self.valid_moves = self.get_valid_moves_by_bfs(q, r)
 
         self.draw_board()
-
-    # 是否满足跳棋跳动规则：平行x轴线上
-    def judge_x(self, q, r, temp_q):
-
-        judge=True
-        # 中间点在棋盘可行域上
-        judge=  temp_q in self.valid_positions.get([], r)
-        # 中间点不为空
-        if self.board[(temp_q, r)]==0:
-            judge=False
-        # 起点与中间点之间全为空
-        for dq in range(q, temp_q):
-           if self.board[(dq, r)]!=0:
-              judge=False
-              break
-        # 终点在棋盘可行域上
-        judge=  2*temp_q-q in self.valid_positions.get([], r)
-        # 终点与中间点之间全为空
-        for dq in range(temp_q, 2*temp_q-q):
-           if self.board[(dq, r)]!=0:
-              judge=False
-              break
-        if judge:
-           final_q=2*temp_q-q
-           return [final_q,r]
     
-    # 是否满足跳棋跳动规则：平行y轴线上
-    def judge_y(self, q, r, temp_r):
+ 
 
-        judge=True
-        # 中间点在棋盘可行域上
-        judge=  temp_r in self.valid_positions.get(q, [])
-        # 中间点不为空
-        if self.board[(q, temp_r)] == 0:
-            judge = False
-        # 起点与中间点之间全为空
-        for dr in range(r, temp_r):
-           if self.board[(q, dr)] != 0:
-              judge=False
-              break
-        # 终点在棋盘可行域上
-        judge=  2*temp_r-r in self.valid_positions.get(q, [])
-        # 终点与中间点之间全为空
-        for dq in range(temp_r, 2*temp_r-r):
-           if self.board[(q, dr)]!=0:
-              judge=False
-              break
-        if judge:
-           final_r=2*temp_r-r
-           return [q,final_r]
+    # 满足跳棋跳动规则：平行x轴线上
+    def find_judge_x(self, q, r):
+
+        moves_q=[]
+
+        for temp_q in self.r_valid_positions.get(r,[]):
+            judge=True
+
+            if temp_q != q:
+                # 中间点不为空
+                if self.board[(temp_q, r)] == 0:
+                    judge = False
+                # 起点与中间点之间全为空
+                if judge:
+                    for dq in create_array_exclude_both(q, temp_q):
+                        if self.board[(dq, r)] != 0:
+                            judge=False
+              
+                # 终点在棋盘可行域上
+                judge=  2*temp_q-q in self.q_valid_positions.get(r,[])
+                # 终点与中间点之间全为空
+                if judge:
+                    for dq in create_array_exclude_both(temp_q, 2*temp_q-q):
+                        if self.board[(dq, r)]!=0:
+                            judge=False
+                
+                if judge:
+                    final_q=2*temp_q-q
+                    moves_q.append((final_q, r))
+        
+        return moves_q
+    
+    # 满足跳棋跳动规则：平行y轴线上
+    def find_judge_y(self, q, r):
+        
+        moves_r=[]
+
+        for temp_r in self.q_valid_positions.get(q, []):
+            judge=True
+
+            if temp_r != r:
+                # 中间点不为空
+                if self.board[(q, temp_r)] == 0:
+                    judge = False
+                # 起点与中间点之间全为空
+                if judge:
+                    for dr in create_array_exclude_both(r, temp_r):
+                        if self.board[(q, dr)] != 0:
+                            judge=False
+              
+                # 终点在棋盘可行域上
+                judge=  2*temp_r-r in self.q_valid_positions.get(q, [])
+                # 终点与中间点之间全为空
+                if judge:
+                    for dr in create_array_exclude_both(temp_r, 2*temp_r-r):
+                        if self.board[(q, dr)]!=0:
+                            judge=False
+                if judge:
+                    final_r=2*temp_r-r
+                    moves_r.append((q, final_r))
+        
+        return moves_r
+ 
+
+    # 满足跳棋跳动规则：平行|x-y|轴线上
+    def find_judge_x_minus_y(self, q, r):
+
+        moves_q_r=[]
+
+        for (temp_q, temp_r) in self.data_q_plus_r.get(q + r, []):
             
-    # 是否满足跳棋跳动规则：平行|x-y|轴线上
-    def judge_y(self, q, r, temp_q, temp_r):
+            judge=True
 
-        judge = True
-        # 中间点在棋盘可行域上
-        judge =  temp_q in self.valid_positions.get([], temp_r)
-        judge =  temp_r in self.valid_positions.get(temp_q, [])
-        # 中间点在平行|x-y|轴线上
-        if q + r != temp_q + temp_r:
-           judge = False
-        # 中间点不为空
-        if self.board[(temp_q, temp_r)] == 0:
-            judge = False
-        # 起点与中间点之间全为空
-        for dr in range(r, temp_r):
-           if self.board[(q + r - dr, dr)] != 0:
-              judge=False
-        # 终点在棋盘可行域上
-        judge =  2 * temp_q-r in self.valid_positions.get([], r)
-        judge =  2 * temp_r-r in self.valid_positions.get(q, [])
-        # 终点与中间点之间全为空
-        for dq in range(temp_r, 2*temp_r-r):
-           if self.board[(q, dr)]!=0:
-              judge=False
-        if judge:
-           final_q = 2 * temp_q - q
-           final_r = 2 * temp_r - r
-           return [final_q,final_r]          
+            if temp_r != r:
+                # 中间点不为空
+                if self.board[(temp_q, temp_r)] == 0:
+                    judge = False
+                # 起点与中间点之间全为空
+                if judge:
+                    for dr in create_array_exclude_both(r, temp_r):
+                        if self.board[(q + r - dr, dr)] != 0:
+                            judge=False
+              
+                # 终点在棋盘可行域上
+                judge=  (2*temp_q-q, 2*temp_r-r) in self.data_q_plus_r.get(q + r , [])
+                # 终点与中间点之间全为空
+                if judge:
+                    for dr in create_array_exclude_both(temp_r, 2*temp_r-r):
+                        if self.board[(q + r - dr , dr)]!=0:
+                            judge=False
+                if judge:
+                    final_q=2*temp_q-q
+                    final_r=2*temp_r-r
+                    moves_q_r.append((final_q, final_r))
+        
+        return moves_q_r          
 
     # 搜索：移动，跳动，返回所有可行点
     def get_valid_moves_by_bfs(self, q, r,):
@@ -279,15 +308,38 @@ class ChineseCheckersApp:
         for dq, dr in directions:
             nq, nr = q + dq, r + dr
             if isValidOblique(nq, nr) and self.board.get((nq, nr), 1) == 0:
-                moves.append((nq, nr))
-        
-        temp_q in self.valid_positions.get([], r)
+                moves.append((nq, nr))        
 
-        temp_r in self.valid_positions.get(q, [])
+        # 初始化队列，并将起始节点添加到队列中
+        queue = deque((q, r))
+        # 使用一个集合来记录访问过的节点
+        visited = set[(q, r)]
 
-        
+        while queue:
+            # 取出队列中的第一个路径
+            path = queue.popleft()
+            # 获取路径的最后一个节点
+            node = path[-1]
 
+            node
 
+            # 如果该节点未被访问过，继续搜索
+            if node not in visited:
+                # 将该节点标记为已访问
+                visited.add(tuple(node))
+                # 扩展路径并将新的路径加入队列
+                graph=[]
+                graph.append(self.find_judge_x (q, r))
+                graph.append(self.find_judge_y(q, r))
+                graph.append(self.find_judge_x_minus_y(q, r))
+                if graph == None:
+                    break
+                for neighbor in graph:
+                    if neighbor not in visited:
+                        path.append(neighbor)
+                        queue.append(neighbor)
+         
+        moves.append(visited)
         return moves
     
     
