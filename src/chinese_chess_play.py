@@ -228,6 +228,8 @@ class ChineseCheckersApp:
                     # 此处颜色相反对应，因为current_turn已经切换了
                     color = self.color2_ if self.current_turn == self.Turn.PLAYER1_TURN else self.color1_
                     self.canvas.create_line(last_screen_x, last_screen_y, screen_x, screen_y, fill=color, width=2, dash=(4, 2))
+                    if (q,r) != self.draw_path[-1]:
+                        self.canvas.create_oval(screen_x - 5, screen_y - 5, screen_x + 5, screen_y + 5, fill=color)
                 last_screen_x = screen_x
                 last_screen_y = screen_y
                     
