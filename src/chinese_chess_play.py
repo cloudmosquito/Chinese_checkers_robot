@@ -418,20 +418,15 @@ class ChineseCheckersApp:
                 self.draw_path = []
                 self.valid_moves, self.valid_paths = self.getValidMoves(q, r)
     def play(self):
-        if self.game_mode == self.GameMode.PVP:
+        if self.game_mode == self.GameMode.PVE and self.current_turn in self.ai_list:
+            self.ai_turn()
+            if self.ai_ok:
+                self.ai_ok = False
+                self.toggleTurn()
+        else:
             if self.player_ok:
                 self.player_ok = False
                 self.toggleTurn()
-        else:
-            if self.current_turn in self.ai_list:
-                self.ai_turn()
-                if self.ai_ok:
-                    self.ai_ok = False
-                    self.toggleTurn()
-            else:
-                if self.player_ok:
-                    self.player_ok = False
-                    self.toggleTurn()
         self.drawBoard()
         self.master.after(1, self.play) 
             
