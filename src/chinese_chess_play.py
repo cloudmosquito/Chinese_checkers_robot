@@ -49,65 +49,6 @@ def oblique2Screen(q, r):
     return screen_x, screen_y
 
 
-# 检查斜坐标是否合法
-def isValidOblique(q, r):
-    """检查给定的斜坐标是否是合法的棋盘点。"""
-    valid_positions = {
-        -8: [4],
-        -7: [3, 4],
-        -6: [2, 3, 4],
-        -5: [1, 2, 3, 4],
-        -4: list(range(-4, 9)),
-        -3: list(range(-4, 8)),
-        -2: list(range(-4, 7)),
-        -1: list(range(-4, 6)),
-         0: list(range(-4, 5)),
-         1: list(range(-5, 5)),
-         2: list(range(-6, 5)),
-         3: list(range(-7, 5)),
-         4: list(range(-8, 5)),
-         5: [-4, -3, -2, -1],
-         6: [-4, -3, -2],
-         7: [-4, -3],
-         8: [-4]
-    }
-    return r in valid_positions.get(q, [])
-
-def isValidInitOblique(player, q, r):
-    valid_init_oblique_list_of_dict = [{
-        1: [-5],
-        2: [-6, -5],
-        3: [-7, -6, -5],
-        4: [-8, -7, -6, -5],
-    },{
-        5: [-4, -3, -2, -1],
-        6: [-4, -3, -2],
-        7: [-4, -3],
-        8: [-4],
-    },{
-        1: [4],
-        2: [3, 4],
-        3: [2, 3, 4],
-        4: [1, 2, 3, 4],
-    },{
-        -4: [5, 6, 7, 8],
-        -3: [5, 6, 7],
-        -2: [5, 6],
-        -1: [5],
-    },{
-        -8: [4],
-        -7: [3, 4],
-        -6: [2, 3, 4],
-        -5: [1, 2, 3, 4],
-    },{
-        -4: [-4, -3, -2, -1],
-        -3: [-4, -3, -2],
-        -2: [-4, -3],
-        -1: [-4],
-    }]
-    
-    return r in valid_init_oblique_list_of_dict[player-1].get(q, [])
-
 
 def create_array_between(q1,r1, q2,r2):
     ans = []
@@ -150,7 +91,7 @@ class ChineseCheckersApp:
             self.PlayerNum.FOR2PLAYER: [1, 4],
             self.PlayerNum.FOR3PLAYER: [1, 3, 5],
             self.PlayerNum.FOR4PLAYER: [2, 3, 5, 6],
-            self.PlayerNum.FOR6PLAYER: [1, 2, 3, 4, 5, 6]
+            self.PlayerNum.FOR6PLAYER: [1, 2, 3, 4, 5, 6] 
         }
         self.player_colors = ["white", "red", "#FF8C00", "magenta", "green", "blue", "purple"]
         self.q_valid_positions = {
@@ -180,6 +121,20 @@ class ChineseCheckersApp:
             k: [(q, k - q) for q in range(-8, 9) if k - q in self.r_valid_positions.get(q, [])] \
                 for k in range(-8, 9)
         }
+        self.home_pos = {
+            1: [(1, -5), (2, -6), (2, -5), (3, -7), (3, -6), (3, -5), \
+                (4, -8), (4, -7), (4, -6), (4, -5)],
+            2: [(5, -4), (5, -3), (5, -2), (5, -1), (6, -4), (6, -3), \
+                (6, -2), (7, -4), (7, -3), (8, -4)],
+            3: [(1, 4), (2, 3), (2, 4), (3, 2), (3, 3), (3, 4), \
+                (4, 1), (4, 2), (4, 3), (4, 4)],
+            4: [(-4, 5), (-4, 6), (-4, 7), (-4, 8), (-3, 5), (-3, 6), \
+                (-3, 7), (-2, 5), (-2, 6), (-1, 5)],
+            5: [(-8, 4), (-7, 3), (-7, 4), (-6, 2), (-6, 3), (-6, 4), \
+                (-5, 1), (-5, 2), (-5, 3), (-5, 4)],
+            6: [(-4, -4), (-4, -3), (-4, -2), (-4, -1), (-3, -4), (-3, -3), \
+                (-3, -2), (-2, -4), (-2, -3), (-1, -4)]
+        }
         '''==================== 变量初始化，与外部输入无关 ===================='''
         self.selected_pos = None
         self.valid_moves = []
@@ -189,6 +144,8 @@ class ChineseCheckersApp:
         self.last_turn = None
         self.player_ok = False
         self.ai_ok = False
+        self.winner = None
+        self.game_over = False
         '''==================== 变量初始化，与外部输入有关 ===================='''
         self.player_num = player_num
         self.game_mode = game_mode
@@ -206,7 +163,13 @@ class ChineseCheckersApp:
         self.canvas.pack()
         self.canvas.bind("<Button-1>", self.handleClick)
         self.board = self.create_chinese_checkers_board()
+    # 检查斜坐标是否合法
+    def isValidOblique(self, q, r):
+        """检查给定的斜坐标是否是合法的棋盘点。"""    
+        return r in self.q_valid_positions.get(q, [])
 
+    def isValidInitOblique(self, player, q, r):
+        return (q, r) in self.home_pos.get(player, [])
     def create_ai_list(self):
         """创建AI列表"""
         ai_list = []
@@ -221,7 +184,7 @@ class ChineseCheckersApp:
             for r in self.q_valid_positions.get(q, []):
                 is_created = False
                 for i in self.player_dict[self.player_num]:
-                    if isValidInitOblique(i, q, r):
+                    if self.isValidInitOblique(i, q, r):
                         board[(q,r)] = i
                         is_created = True
                         break
@@ -296,7 +259,7 @@ class ChineseCheckersApp:
                     is_mid_valid = False
                     break
             # 判断(2*temp_q-q, 2*temp_r-r)是不是可行点
-            if (not is_mid_valid) or (not isValidOblique(2*temp_q-q, 2*temp_r-r)) \
+            if (not is_mid_valid) or (not self.isValidOblique(2*temp_q-q, 2*temp_r-r)) \
                 or board[(2*temp_q-q, 2*temp_r-r)] != 0:
                 continue
             # 判断(temp_q, temp_r)和(2*temp_q-q, 2*temp_r-r)之间是否全空
@@ -327,7 +290,7 @@ class ChineseCheckersApp:
         directions = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)]
         for dq, dr in directions:
             nq, nr = q + dq, r + dr
-            if isValidOblique(nq, nr) and self.board[(nq, nr)] == 0:
+            if self.isValidOblique(nq, nr) and self.board[(nq, nr)] == 0:
                 moves.append((nq, nr))
                 paths.append([(q, r), (nq, nr)])  # 添加路径：从起点到终点
 
@@ -390,7 +353,7 @@ class ChineseCheckersApp:
         clicked_x = (event.x - 300) / 40
         clicked_y = (300 - event.y) / 40
         q, r = cartesian2Oblique(clicked_x, clicked_y)
-        if not isValidOblique(q, r):  # 点击位置不在棋盘上
+        if not self.isValidOblique(q, r):  # 点击位置不在棋盘上
             return
         
         if self.selected_pos:
@@ -417,6 +380,22 @@ class ChineseCheckersApp:
                 self.need_draw_path = False
                 self.draw_path = []
                 self.valid_moves, self.valid_paths = self.getValidMoves(q, r)
+                
+    def checkWinner(self):
+        for player in self.player_dict.get(self.player_num, []):
+            is_player_win = True
+            goal = (player + 2) % 6 + 1
+            for (q, r) in self.home_pos.get(goal, []):
+                if self.board[(q,r)] != player:
+                    is_player_win = False
+                    break
+                if is_player_win:
+                    self.winner = player
+                    self.game_over = True
+                    break
+            
+            
+        
     def play(self):
         if self.game_mode == self.GameMode.PVE and self.current_turn in self.ai_list:
             self.ai_turn()
@@ -427,13 +406,17 @@ class ChineseCheckersApp:
             if self.player_ok:
                 self.player_ok = False
                 self.toggleTurn()
+        self.checkWinner()
         self.drawBoard()
-        self.master.after(1, self.play) 
+        if not self.game_over:
+            self.master.after(1, self.play) 
+        else:
+            print(f"!!!!!!!!!!!!!!Winner is {self.winner}!!!!!!!!!!!!!!")
             
                 
     
 if __name__ == "__main__":
     root = tk.Tk()
-    app = ChineseCheckersApp(root, ChineseCheckersApp.PlayerNum.FOR6PLAYER, ChineseCheckersApp.GameMode.PVE)
+    app = ChineseCheckersApp(root, ChineseCheckersApp.PlayerNum.FOR2PLAYER, ChineseCheckersApp.GameMode.PVP)
     app.play()
     root.mainloop()
