@@ -8,6 +8,10 @@ class MCTSAgent:
         self.game = game
         self.player_num = player_num
         self.root = None
+        self.start_pos = None
+        self.target_pos = None
+        self.pos_found = False
+        self.need_send_comm_to_robot = False
         
     class Node:
         class State:
@@ -78,7 +82,6 @@ class MCTSAgent:
             game_over, winner = self.game.checkWinner(current_board)
             if i > 150:
                 break
-        print(winner)
         return winner
 
     def backpropagate(self, node, result):
@@ -96,7 +99,6 @@ class MCTSAgent:
         self.root = self.Node(state)
         self.root.visits = 1  # 根节点首先被访问一次
         for i in range(100):  # 模拟次数
-            print(f"第{i}次模拟")
             selected_node = self.select(self.root)    # 选择
             self.expand(selected_node)                # 扩展
             result = self.simulate(selected_node)     # 模拟
@@ -130,16 +132,24 @@ class MCTSAgent:
     def run(self):
         # print("ai is runing")
         if (not self.game.game_over) and (not self.game.ai_ok) and \
-            (self.game.current_turn == self.player_num):
-            print("searching...")
+            (self.game.current_turn == self.player_num) and (not self.pos_found):
+            # print("searching...")
             board = self.game.board
             current_turn = self.game.current_turn
             current_state = self.Node.State(None, None, None, board, current_turn)
             selected, goal, path = self.get_best_move_dev(current_state)
+            self.start_pos = selected
+            self.target_pos = goal
+            self.need_send_comm_to_robot = True
+            self.game.selected_pos = selected
             self.game.need_draw_path = True
             self.game.draw_path = path
             self.game.movePos(self.game.board, selected, goal)
-            self.game.ai_ok = True
-            print("finished")
-        threading.Timer(0.002, self.run).start()
+            self.pos_found = True
+            # print("finished")
+        else:
+            self.start_pos = None
+            self.target_pos = None
+            self.need_send_comm_to_robot = False
+        threading.Timer(0.1, self.run).start()
         
