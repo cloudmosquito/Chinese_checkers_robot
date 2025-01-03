@@ -135,6 +135,14 @@ class ChineseCheckersApp:
             6: [(-4, -4), (-4, -3), (-4, -2), (-4, -1), (-3, -4), (-3, -3), \
                 (-3, -2), (-2, -4), (-2, -3), (-1, -4)]
         }
+        self.base_pos = {
+            1: (4, -8),
+            2: (8, -4),
+            3: (4, 4),
+            4: (-4, 8),
+            5: (-8, 4),
+            6: (-4, -4)
+        }
         '''==================== 变量初始化，与外部输入无关 ===================='''
         self.selected_pos = None
         self.valid_moves = []
@@ -233,10 +241,10 @@ class ChineseCheckersApp:
                 last_screen_x = screen_x
                 last_screen_y = screen_y
                                 
-    def findValidPos(self, q, r):
+    def findValidPos(self, in_board, q, r):
         moves = []
         # 构建selected_pos移动到(q,r)之后的棋盘
-        board = self.board.copy() # 该字典没有嵌套对象，直接使用浅拷贝复制即可
+        board = in_board.copy() # 该字典没有嵌套对象，直接使用浅拷贝复制即可
         if (q,r) != self.selected_pos:
             board[(q,r)] = self.current_turn
             board[self.selected_pos] = 0
@@ -272,7 +280,7 @@ class ChineseCheckersApp:
         return moves
             
 
-    def getValidMoves(self, q, r):
+    def getValidMoves(self, board, q, r):
         """找到(q,r)位置棋子的下一步所有可行点
 
         Args:
@@ -290,7 +298,7 @@ class ChineseCheckersApp:
         directions = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)]
         for dq, dr in directions:
             nq, nr = q + dq, r + dr
-            if self.isValidOblique(nq, nr) and self.board[(nq, nr)] == 0:
+            if self.isValidOblique(nq, nr) and board[(nq, nr)] == 0:
                 moves.append((nq, nr))
                 paths.append([(q, r), (nq, nr)])  # 添加路径：从起点到终点
 
@@ -306,7 +314,7 @@ class ChineseCheckersApp:
             current_position = current_path[-1]  # 当前路径的末尾是当前位置
 
             # 扩展路径并将新的路径加入队列
-            neighbors = self.findValidPos(*current_position)
+            neighbors = self.findValidPos(board, *current_position)
             
             for neighbor in neighbors:
                 if neighbor not in visited:
@@ -320,28 +328,20 @@ class ChineseCheckersApp:
         return moves, paths
     
 
-    def movePos(self, begin, end):
-        self.board[end] = self.board[begin]
-        self.board[begin] = 0
-
-    def ai_turn(self):
-        # Placeholder for AI logic
-        moves = []  # AI logic to find moves here
-        if moves:
-            start, end = moves[0]
-            self.movePos(start, end)
-    
-    def toggleTurn(self):
-        self.last_turn = self.current_turn
+    def movePos(self, board, begin, end):
+        board[end] = board[begin]
+        board[begin] = 0
+        return board
+        
+    def toggleTurn(self, current_turn):
+        last_turn = current_turn
         player_list = self.player_dict.get(self.player_num, [])
-        index = player_list.index(self.current_turn)
+        index = player_list.index(current_turn)
         if index == len(player_list) - 1:
-            self.current_turn = player_list[0]
+            next_turn = player_list[0]
         else:
-            self.current_turn = player_list[index + 1]
-            
-        if self.game_mode == self.GameMode.PVE and self.current_turn in self.ai_list:
-            self.ai_turn()
+            next_turn = player_list[index + 1]
+        return last_turn, next_turn
                 
     def handleClick(self, event):
         """ 处理鼠标左键单击事件 """
@@ -359,7 +359,7 @@ class ChineseCheckersApp:
         if self.selected_pos:
             # 第二次点击
             if (q, r) in self.valid_moves:  # 移动棋子
-                self.movePos(self.selected_pos, (q, r))
+                self.board = self.movePos(self.board, self.selected_pos, (q, r))
             
                 for path in self.valid_paths:
                     if path[-1] == (q,r) :
@@ -373,50 +373,61 @@ class ChineseCheckersApp:
                 self.valid_paths = []
             elif self.board[(q, r)] == self.current_turn:
                 self.selected_pos = (q, r) # 更换选中的棋子
-                self.valid_moves, self.valid_paths = self.getValidMoves(q, r)
+                self.valid_moves, self.valid_paths = self.getValidMoves(self.board, q, r)
         elif self.board[(q, r)] == self.current_turn:
             # 第一次点击：选择棋子   
                 self.selected_pos = (q, r)
                 self.need_draw_path = False
                 self.draw_path = []
-                self.valid_moves, self.valid_paths = self.getValidMoves(q, r)
+                self.valid_moves, self.valid_paths = self.getValidMoves(self.board, q, r)
                 
-    def checkWinner(self):
+    def checkWinner(self, board):
+        """根据棋盘判定游戏是否结束，并给出赢家，工具函数，供外部使用"""
+        game_over = False
+        winner = None
         for player in self.player_dict.get(self.player_num, []):
             is_player_win = True
             goal = (player + 2) % 6 + 1
             for (q, r) in self.home_pos.get(goal, []):
-                if self.board[(q,r)] != player:
+                if board[(q,r)] != player:
                     is_player_win = False
                     break
-                if is_player_win:
-                    self.winner = player
-                    self.game_over = True
-                    break
-            
-            
+            if is_player_win:
+                winner = player
+                game_over = True
+                break
+        return game_over, winner
+    
+    def getScore(self, board, begin, move, player):
+        goal = (player + 2) % 6 + 1
+       
+        goal_q, goal_r = self.base_pos.get(goal)
+        base_q, base_r = self.base_pos.get(player)
         
+        goal_x, goal_y = oblique2Cartesian(goal_q, goal_r)
+        base_x, base_y = oblique2Cartesian(base_q, base_r)
+        
+        move_x, move_y = oblique2Cartesian(move[0], move[1])
+        begin_x, begin_y = oblique2Cartesian(begin[0], begin[1])
+        
+        return (move_x-begin_x)*(goal_x - base_x) + (move_y-begin_y)*(goal_y-base_y) \
+            + 10 * (math.sqrt((begin_x - goal_x)**2 + (begin_y - goal_y)**2) - math.sqrt((move_x - goal_x)**2 + (move_y - goal_y)**2))
+    
+    
     def play(self):
+        # print("chess is running...")
         if self.game_mode == self.GameMode.PVE and self.current_turn in self.ai_list:
-            self.ai_turn()
             if self.ai_ok:
                 self.ai_ok = False
-                self.toggleTurn()
+                self.last_turn, self.current_turn = self.toggleTurn(self.current_turn)
         else:
             if self.player_ok:
                 self.player_ok = False
-                self.toggleTurn()
-        self.checkWinner()
+                self.last_turn, self.current_turn = self.toggleTurn(self.current_turn)
+        self.game_over, self.winner = self.checkWinner(self.board)
         self.drawBoard()
         if not self.game_over:
             self.master.after(1, self.play) 
         else:
             print(f"!!!!!!!!!!!!!!Winner is {self.winner}!!!!!!!!!!!!!!")
-            
-                
     
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = ChineseCheckersApp(root, ChineseCheckersApp.PlayerNum.FOR2PLAYER, ChineseCheckersApp.GameMode.PVP)
-    app.play()
-    root.mainloop()
