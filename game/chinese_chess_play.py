@@ -3,6 +3,76 @@ from tkinter import messagebox
 import math
 from enum import Enum
 from collections import deque
+import pyttsx3
+from mcts_agent import MCTSAgent
+import threading
+import socket
+import time
+
+class comm:
+  def __init__(self, ai, app, sk):
+      # 初始参数
+      self.initial_height = 90      # 初始高度
+      self.grab_height = 75         # 抓取下降高度
+      self.release_height = 80      # 释放下降高度
+      self.speed = 2000             # 移动速度
+      self.ai = ai
+      self.app = app
+      self.sk = sk
+  def generate_set_coords_command(self, coords, speed = 500):
+      """
+      根据坐标生成Socket格式的set_coords命令。
+      :param coords: 坐标列表 [x, y, z, rx, ry, rz]
+      :param speed: 移动速度
+      :return: 格式化的命令字符串
+      """
+      return f"set_coords({','.join(map(str, coords))},{speed})"
+
+  def send_command_to_robot(self, socket, command):
+      """
+      通过Socket发送命令到机器人。
+      :param socket: 已连接的Socket对象
+      :param command: 要发送的命令字符串
+      """
+      try:
+          socket.send(bytes(command, encoding='utf-8'))
+          print(f"发送命令: {command}")
+      except socket.error as e:
+          print("发送数据时出现错误:", e)
+
+      try:
+          data = str(socket.recv(1024))
+          print("机械臂返回信息:", data[2:-1])
+      except socket.error as e:
+          print("接收数据时出现错误:", e)
+
+  def act(self):
+    if self.ai.need_send_comm_to_robot:
+      start_x, start_y = self.ai.start_pos[0], self.ai.start_pos[1]
+      target_x, target_y = self.ai.target_pos[0], self.ai.target_pos[1]
+      # 生成操作步骤
+      steps = [
+          # 1. 下降抓取
+          [start_x, start_y, self.grab_height, -179, 0, 0],
+          # 2. 升高
+          [start_x, start_y, self.initial_height, -179, 0, 0],
+          # 3. 移动至目标点
+          [target_x, target_y, self.initial_height, -179, 0, 0],
+          # 4. 下降释放
+          [target_x, target_y, self.release_height, -179, 0, 0],
+          # 5. 升高到初始高度
+          [target_x, target_y, self.initial_height, -179, 0, 0],
+      ]
+
+      # 遍历操作步骤并发送命令
+      for step_coords in steps:
+          command = self.generate_set_coords_command(step_coords, speed=self.speed)
+          self.send_command_to_robot(self.sk, command)
+          time.sleep(5)  # 等待机械臂完成动作
+      self.app.ai_ok = True
+      self.app.need_draw_path = True
+      self.ai.pos_found = False
+    threading.Timer(0.001, self.act).start()
 
 # 坐标转换工具
 def cartesian2Oblique(x, y):
@@ -431,4 +501,96 @@ class ChineseCheckersApp:
             self.master.after(1, self.play) 
         else:
             print(f"!!!!!!!!!!!!!!Winner is {self.winner}!!!!!!!!!!!!!!")
-    
+
+
+class MainMenu:
+    def __init__(self, master, sk):
+        self.master = master
+        self.master.title("Chinese Checkers")
+        self.master.geometry("400x600")
+        self.engine = pyttsx3.init()
+        self.sk = sk
+        self.start_button = tk.Button(master, text="开始游戏", command=self.select_game_mode, bg="red", fg="white", width=20, height=3)
+        self.start_button.pack(pady=60)
+        
+        self.instructions_button = tk.Button(master, text="游戏说明", command=self.show_instructions, bg="blue", fg="white", width=20, height=3)
+        self.instructions_button.pack(pady=60)
+        
+        self.exit_button = tk.Button(master, text="退出游戏", command=self.exit_game, bg="gray", fg="white", width=20, height=3)
+        self.exit_button.pack(pady=60)
+
+    def speak(self, text):
+        """使用 pyttsx3 播放语音"""
+        self.engine.say(text)
+        self.engine.runAndWait()
+
+    def select_game_mode(self):
+        """让玩家选择游戏模式：人机对战或玩家对战。"""
+        self.master.withdraw()  # 隐藏主界面
+        mode_window = tk.Toplevel(self.master)
+        mode_window.title("选择游戏模式")
+        mode_window.geometry("300x300")
+        
+        tk.Label(mode_window, text="请选择游戏模式：", font=("Arial", 14)).pack(pady=20)
+        tk.Button(mode_window, text="玩家对战", bg="red", fg="white",
+                  command=lambda: self.start_game(mode_window, ChineseCheckersApp.PlayerNum.FOR2PLAYER, ChineseCheckersApp.GameMode.PVP),
+                  width=20, height=2).pack(pady=10)
+        tk.Button(mode_window, text="人机对战", bg="blue", fg="white",
+                  command=lambda: self.select_ai_difficulty(mode_window), width=20, height=2).pack(pady=30)
+        
+        # 延迟语音提示，确保界面加载完成后播放
+        mode_window.after(500, lambda: self.speak("请选择游戏模式"))
+
+    def select_ai_difficulty(self, parent_window):
+        """选择 AI 的难度级别。"""
+        parent_window.destroy()
+        difficulty_window = tk.Toplevel(self.master)
+        difficulty_window.title("选择AI难度")
+        difficulty_window.geometry("300x300")
+
+        tk.Label(difficulty_window, text="请选择AI难度：", font=("Arial", 14)).pack(pady=20)
+        tk.Button(difficulty_window, text="简单", bg="red", fg="white",
+                  command=lambda: self.start_game(difficulty_window, ChineseCheckersApp.PlayerNum.FOR2PLAYER, ChineseCheckersApp.GameMode.PVE, [4]),
+                  width=20, height=2).pack(pady=10)
+        tk.Button(difficulty_window, text="中等", bg="blue", fg="white",
+                  command=lambda: self.start_game(difficulty_window, ChineseCheckersApp.PlayerNum.FOR2PLAYER, ChineseCheckersApp.GameMode.PVE, [4]),
+                  width=20, height=2).pack(pady=10)
+        tk.Button(difficulty_window, text="困难", bg="green", fg="white",
+                  command=lambda: self.start_game(difficulty_window, ChineseCheckersApp.PlayerNum.FOR2PLAYER, ChineseCheckersApp.GameMode.PVE, [4]),
+                  width=20, height=2).pack(pady=10)
+
+        # 延迟语音提示
+        difficulty_window.after(500, lambda: self.speak("请选择难度"))
+
+    def start_game(self, parent_window, player_num, game_mode, ai_list=[]):
+        """启动游戏窗口，并设置游戏模式和玩家数量。"""
+        parent_window.destroy()
+        game_window = tk.Toplevel(self.master)
+        game_window.title("游戏界面")
+        self.speak("游戏开始")
+        app = ChineseCheckersApp(game_window, player_num=player_num, game_mode=game_mode, ai_list=ai_list)
+        app.play()
+        ai_player1 = MCTSAgent(app, 4)
+        robot_comm = comm(ai_player1, app, self.sk)
+        threading.Thread(target=robot_comm.act, daemon=True).start()
+        threading.Thread(target=ai_player1.run, daemon=True).start()
+
+    def show_instructions(self):
+        rules = """
+        跳棋规则：
+        1. 玩家轮流移动棋子。
+        2. 棋子可以移动到相邻的空格或跳过一颗棋子。
+        3. 首先将所有棋子移动到对面基地者胜。
+        """
+        messagebox.showinfo("游戏说明", rules)
+        self.master.after(500, lambda: self.speak(rules.strip()))
+
+    def exit_game(self):
+        """弹出确认退出窗口"""
+        exit_window = tk.Toplevel(self.master)
+        exit_window.title("退出游戏")
+        exit_window.geometry("300x200")
+        tk.Label(exit_window, text="真的要退出吗？", font=("Arial", 12)).pack(pady=10)
+        tk.Button(exit_window, text="确认", command=self.master.quit, bg="red", fg="white", width=10).pack(side="left", padx=20)
+        tk.Button(exit_window, text="取消", command=exit_window.destroy, bg="green", fg="white", width=10).pack(side="right", padx=20)
+        exit_window.after(500, lambda: self.speak("真的要退出吗"))

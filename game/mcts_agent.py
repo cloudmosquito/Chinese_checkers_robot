@@ -131,6 +131,7 @@ class MCTSAgent:
         
     def run(self):
         # print("ai is runing")
+        print(self.need_send_comm_to_robot)
         if (not self.game.game_over) and (not self.game.ai_ok) and \
             (self.game.current_turn == self.player_num) and (not self.pos_found):
             # print("searching...")
@@ -138,8 +139,8 @@ class MCTSAgent:
             current_turn = self.game.current_turn
             current_state = self.Node.State(None, None, None, board, current_turn)
             selected, goal, path = self.get_best_move_dev(current_state)
-            self.start_pos = selected
-            self.target_pos = goal
+            self.start_pos = self.game.real_board.get[selected]
+            self.target_pos = self.game.real_board.get[goal]
             self.need_send_comm_to_robot = True
             self.game.selected_pos = selected
             self.game.need_draw_path = True
@@ -151,5 +152,5 @@ class MCTSAgent:
             self.start_pos = None
             self.target_pos = None
             self.need_send_comm_to_robot = False
-        threading.Timer(0.1, self.run).start()
+        threading.Timer(0.2, self.run).start()
         
