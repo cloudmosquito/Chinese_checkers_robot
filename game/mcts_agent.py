@@ -109,6 +109,7 @@ class MCTSAgent:
         valid_choice = []
         for (q, r), value in state.board.items():
             if value == state.turn:
+                self.game.selected_pos = (q, r)
                 moves, paths = self.game.getValidMoves(state.board, q, r)
                 if moves:
                     for move in moves:

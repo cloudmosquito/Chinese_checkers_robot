@@ -373,10 +373,12 @@ class ChineseCheckersApp:
                 self.valid_paths = []
             elif self.board[(q, r)] == self.current_turn:
                 self.selected_pos = (q, r) # 更换选中的棋子
+                print(self.selected_pos)
                 self.valid_moves, self.valid_paths = self.getValidMoves(self.board, q, r)
         elif self.board[(q, r)] == self.current_turn:
             # 第一次点击：选择棋子   
                 self.selected_pos = (q, r)
+                print(self.selected_pos)
                 self.need_draw_path = False
                 self.draw_path = []
                 self.valid_moves, self.valid_paths = self.getValidMoves(self.board, q, r)
