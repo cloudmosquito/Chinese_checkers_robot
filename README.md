@@ -15,12 +15,13 @@
 |  ├─visualization.py       # 可视化
 |  └─read_BGR_HSV.py        # 鼠标点击读取像素BGR和HSV信息
 ├─game
-│  └─chinese_chess_play.py  # 跳棋游戏
-├─rl_decision               # 跳棋决策AI，用强化学习训练
-|  ├─rl_agent_dqn.py
-|  ├─rl_env.py
-|  ├─rl_reward_model.py
-|  └─rl_train.py
+|  ├─main.py
+|  ├─comm.py                  # 与机械臂通信
+|  ├─drawer.py                # 绘制棋盘
+|  ├─menu.py                  # 主菜单UI
+|  ├─mcts_agent.py            # 基于MCTS算法的AI
+│  └─chinese_checkers_play.py  # 跳棋游戏
+|
 ├─RREADME.md                # 说明文档
 └─requirements.txt          # 依赖项
 ```
@@ -32,8 +33,8 @@
 - matplotlib==3.8.2
 - numpy==1.24.4
 - opencv_python==4.10.0.84
+- pyttsx3==2.98
 - scikit_learn==1.3.2
-- torch==2.5.1
 
 可通过以下命令安装
 
