@@ -1,93 +1,7 @@
-import tkinter as tk
-from tkinter import messagebox
 import math
 from enum import Enum
 from collections import deque
-import pyttsx3
 from mcts_agent import MCTSAgent
-import threading
-import socket
-import time
-
-class comm:
-  def __init__(self, ai, app, sk):
-      # 初始参数
-      self.initial_height = 90      # 初始高度
-      self.grab_height = 75         # 抓取下降高度
-      self.release_height = 80      # 释放下降高度
-      self.speed = 2000             # 移动速度
-      self.ai = ai
-      self.app = app
-      self.sk = sk
-  def generate_set_coords_command(self, coords, speed = 500):
-      """
-      根据坐标生成Socket格式的set_coords命令。
-      :param coords: 坐标列表 [x, y, z, rx, ry, rz]
-      :param speed: 移动速度
-      :return: 格式化的命令字符串
-      """
-      return f"set_coords({','.join(map(str, coords))},{speed})"
-
-  def send_command_to_robot(self, socket, command):
-      """
-      通过Socket发送命令到机器人。
-      :param socket: 已连接的Socket对象
-      :param command: 要发送的命令字符串
-      """
-      try:
-          socket.send(bytes(command, encoding='utf-8'))
-          print(f"发送命令: {command}")
-      except socket.error as e:
-          print("发送数据时出现错误:", e)
-
-      try:
-          data = str(socket.recv(1024))
-          print("机械臂返回信息:", data[2:-1])
-      except socket.error as e:
-          print("接收数据时出现错误:", e)
-
-  def act(self):
-    if self.ai.need_send_comm_to_robot:
-      start_x, start_y = self.ai.start_pos[0], self.ai.start_pos[1]
-      target_x, target_y = self.ai.target_pos[0], self.ai.target_pos[1]
-      # 生成操作步骤
-      steps = [
-          # 1. 下降抓取
-          [start_x, start_y, self.grab_height, -179, 0, 0],
-          # 2. 升高
-          [start_x, start_y, self.initial_height, -179, 0, 0],
-          # 3. 移动至目标点
-          [target_x, target_y, self.initial_height, -179, 0, 0],
-          # 4. 下降释放
-          [target_x, target_y, self.release_height, -179, 0, 0],
-          # 5. 升高到初始高度
-          [target_x, target_y, self.initial_height, -179, 0, 0],
-      ]
-
-      # 遍历操作步骤并发送命令
-      for step_coords in steps:
-          command = self.generate_set_coords_command(step_coords, speed=self.speed)
-          self.send_command_to_robot(self.sk, command)
-          time.sleep(5)  # 等待机械臂完成动作
-      self.app.ai_ok = True
-      self.app.need_draw_path = True
-      self.ai.pos_found = False
-    threading.Timer(0.001, self.act).start()
-
-# 坐标转换工具
-def cartesian2Oblique(x, y):
-    """将直角坐标系转换为斜坐标系
-
-    Args:
-        x (float): 直角坐标系下的横坐标
-        y (float): 直角坐标系下的纵坐标
-
-    Returns:
-        tuple(int, int): 斜坐标系下的横坐标和纵坐标
-    """
-    q = x - y / math.sqrt(3)
-    r = 2 * y / math.sqrt(3)
-    return round(q), round(r)
 
 def oblique2Cartesian(q, r):
     """将斜坐标系转换为直角坐标系
@@ -102,23 +16,19 @@ def oblique2Cartesian(q, r):
     x = q + 0.5 * r
     y = (math.sqrt(3) / 2) * r
     return x, y
-
-def oblique2Screen(q, r):
-    """将斜坐标系转换为显示屏幕的直角坐标系
+def cartesian2Oblique(x, y):
+    """将直角坐标系转换为斜坐标系
 
     Args:
-        q (int): 斜坐标系下的横坐标
-        r (int): 斜坐标系下的纵坐标
+        x (float): 直角坐标系下的横坐标
+        y (float): 直角坐标系下的纵坐标
 
     Returns:
-        tuple(float, float): 直角坐标系下的横坐标和斜坐标
+        tuple(int, int): 斜坐标系下的横坐标和纵坐标
     """
-    x, y = oblique2Cartesian(q, r)
-    screen_x = 300 + x * 40
-    screen_y = 300 - y * 40
-    return screen_x, screen_y
-
-
+    q = x - y / math.sqrt(3)
+    r = 2 * y / math.sqrt(3)
+    return round(q), round(r)
 
 def create_array_between(q1,r1, q2,r2):
     ans = []
@@ -141,7 +51,6 @@ def create_array_between(q1,r1, q2,r2):
 
 
 '''========================= 跳棋游戏类 ====================================='''
-
 class ChineseCheckersApp:
     class PlayerNum(Enum):
         """当前玩家数量枚举类"""
@@ -153,6 +62,12 @@ class ChineseCheckersApp:
         """当前游戏模式枚举类"""
         PVP = 0
         PVE = 1
+    class LastPath:
+        """绘制路径类"""
+        def __init__(self, need_draw, path, player):
+            self.need_draw = need_draw
+            self.path = path
+            self.player = player
         
     """====================== 初始化函数 ================================="""
     def __init__(self, master, player_num, game_mode=GameMode.PVP, ai_list = []):
@@ -163,7 +78,6 @@ class ChineseCheckersApp:
             self.PlayerNum.FOR4PLAYER: [2, 3, 5, 6],
             self.PlayerNum.FOR6PLAYER: [1, 2, 3, 4, 5, 6] 
         }
-        self.player_colors = ["white", "red", "#FF8C00", "magenta", "green", "blue", "purple"]
         self.q_valid_positions = {
             -8: [4],
             -7: [3, 4],
@@ -218,9 +132,7 @@ class ChineseCheckersApp:
         self.selected_pos = None
         self.valid_moves = []
         self.valid_paths = []
-        self.draw_path = []
-        self.need_draw_path = False
-        self.last_turn = None
+        self.last_path = self.LastPath(False, [], "white")
         self.player_ok = False
         self.ai_ok = False
         self.winner = None
@@ -235,13 +147,13 @@ class ChineseCheckersApp:
             self.ai_list = ai_list
         else:
             self.ai_list = []
-        self.current_turn = self.player_dict[self.player_num][0]
+        self.current_player = self.player_dict[self.player_num][0]
         self.master = master
-        self.master.title("Chinese Checkers")
-        self.canvas = tk.Canvas(self.master, width=600, height=600)
-        self.canvas.pack()
-        self.canvas.bind("<Button-1>", self.handleClick)
+        
         self.board = self.create_chinese_checkers_board()
+    
+    """===================== 工具方法 ====================="""
+
     # 检查斜坐标是否合法
     def isValidOblique(self, q, r):
         """检查给定的斜坐标是否是合法的棋盘点。"""    
@@ -249,11 +161,14 @@ class ChineseCheckersApp:
 
     def isValidInitOblique(self, player, q, r):
         return (q, r) in self.home_pos.get(player, [])
+    def getPlayerList(self):
+        return self.player_dict[self.player_num]
+    
     def create_ai_list(self):
         """创建AI列表"""
         ai_list = []
         for i in range(1, self.player_num + 1):
-            if i not in self.player_dict[self.player_num]:
+            if i not in self.getPlayerList():
                 ai_list.append(i)
         return ai_list
     def create_chinese_checkers_board(self):
@@ -262,7 +177,7 @@ class ChineseCheckersApp:
         for q in range(-8, 9):
             for r in self.q_valid_positions.get(q, []):
                 is_created = False
-                for i in self.player_dict[self.player_num]:
+                for i in self.getPlayerList():
                     if self.isValidInitOblique(i, q, r):
                         board[(q,r)] = i
                         is_created = True
@@ -270,54 +185,13 @@ class ChineseCheckersApp:
                 if not is_created:
                     board[(q,r)] = 0
         return board
-
-    def drawBoard(self):
-        """绘制棋盘"""
-        self.canvas.delete("all")
-        
-        # 重新绘制轮次指示圆圈
-        color = self.player_colors[self.current_turn]
-        self.canvas.create_oval(555, 15, 585, 45, fill=color)
-        
-        # 重新绘制每个落棋点
-        for (q, r), value in self.board.items():
-            screen_x, screen_y = oblique2Screen(q, r)
-            # 绘制落棋点
-            color = self.player_colors[value]
-            self.canvas.create_oval(screen_x - 15, screen_y - 15, screen_x + 15, screen_y + 15, fill=color)
-            
-            # 绘制选中棋子特殊高亮
-            if self.selected_pos == (q, r):
-                self.canvas.create_oval(screen_x - 5, screen_y - 5, screen_x + 5, screen_y + 5, fill="black")
-            # 绘制可行点
-            elif (q, r) in self.valid_moves:
-                color = self.player_colors[self.current_turn]
-                self.canvas.create_rectangle(
-                    screen_x - 20, screen_y - 20, screen_x + 20, screen_y + 20,
-                    outline=color, width=2, dash=(4, 2)
-                )
-        # 绘制已走过的路径
-        if self.need_draw_path:
-            start_drawed = False
-            for q, r in self.draw_path:
-                screen_x, screen_y = oblique2Screen(q, r)
-                if not start_drawed:
-                    start_drawed = True      
-                else:
-                    # 此处颜色为上一个回合玩家的颜色，因为current_turn已经切换了
-                    color = self.player_colors[self.last_turn]
-                    self.canvas.create_line(last_screen_x, last_screen_y, screen_x, screen_y, fill=color, width=2, dash=(4, 2))
-                    if (q,r) != self.draw_path[-1]:
-                        self.canvas.create_oval(screen_x - 5, screen_y - 5, screen_x + 5, screen_y + 5, fill=color)
-                last_screen_x = screen_x
-                last_screen_y = screen_y
-                                
+                           
     def findValidPos(self, in_board, q, r):
         moves = []
         # 构建selected_pos移动到(q,r)之后的棋盘
         board = in_board.copy() # 该字典没有嵌套对象，直接使用浅拷贝复制即可
         if (q,r) != self.selected_pos:
-            board[(q,r)] = self.current_turn
+            board[(q,r)] = self.current_player
             board[self.selected_pos] = 0
             
         possible_mid = []
@@ -404,59 +278,52 @@ class ChineseCheckersApp:
         board[begin] = 0
         return board
         
-    def toggleTurn(self, current_turn):
-        last_turn = current_turn
-        player_list = self.player_dict.get(self.player_num, [])
-        index = player_list.index(current_turn)
+    def switchTurn(self, current_player):
+        player_list = self.getPlayerList()
+        index = player_list.index(current_player)
         if index == len(player_list) - 1:
-            next_turn = player_list[0]
+            next_player = player_list[0]
         else:
-            next_turn = player_list[index + 1]
-        return last_turn, next_turn
+            next_player = player_list[index + 1]
+        return next_player
                 
-    def handleClick(self, event):
-        """ 处理鼠标左键单击事件 """
-
-        # 若当前是 PVE 模式 AI 回合，屏蔽鼠标点击响应
-        if self.game_mode == self.GameMode.PVE and self.current_turn in self.ai_list:
+    def playerSelect(self, selected_q, selected_r, is_ai):
+        if not is_ai and self.game_mode == self.GameMode.PVE and self.current_player in self.ai_list:
             return
 
-        clicked_x = (event.x - 300) / 40
-        clicked_y = (300 - event.y) / 40
-        q, r = cartesian2Oblique(clicked_x, clicked_y)
-        if not self.isValidOblique(q, r):  # 点击位置不在棋盘上
+        if not self.isValidOblique(selected_q, selected_r):  # 点击位置不在棋盘上
             return
         
         if self.selected_pos:
             # 第二次点击
-            if (q, r) in self.valid_moves:  # 移动棋子
-                self.board = self.movePos(self.board, self.selected_pos, (q, r))
+            if (selected_q, selected_r) in self.valid_moves:  # 移动棋子
+                self.board = self.movePos(self.board, self.selected_pos, (selected_q, selected_r))
             
                 for path in self.valid_paths:
-                    if path[-1] == (q,r) :
-                        self.need_draw_path = True
-                        self.draw_path = path
+                    if path[-1] == (selected_q,selected_r) :
+                        self.last_path.need_draw = True
+                        self.last_path.path = path
+                        self.last_path.player = self.current_player
                         break
-                
-                self.player_ok = True
+                if not is_ai:
+                    self.player_ok = True
                 self.selected_pos = None
                 self.valid_moves = []
                 self.valid_paths = []
-            elif self.board[(q, r)] == self.current_turn:
-                self.selected_pos = (q, r) # 更换选中的棋子
-                self.valid_moves, self.valid_paths = self.getValidMoves(self.board, q, r)
-        elif self.board[(q, r)] == self.current_turn:
+            elif self.board[(selected_q, selected_r)] == self.current_player:
+                self.selected_pos = (selected_q, selected_r) # 更换选中的棋子
+                self.valid_moves, self.valid_paths = self.getValidMoves(self.board, selected_q, selected_r)
+        elif self.board[(selected_q, selected_r)] == self.current_player:
             # 第一次点击：选择棋子   
-                self.selected_pos = (q, r)
-                self.need_draw_path = False
-                self.draw_path = []
-                self.valid_moves, self.valid_paths = self.getValidMoves(self.board, q, r)
+                self.selected_pos = (selected_q, selected_r)
+                self.last_path.need_draw = False
+                self.valid_moves, self.valid_paths = self.getValidMoves(self.board, selected_q, selected_r)
                 
     def checkWinner(self, board):
         """根据棋盘判定游戏是否结束，并给出赢家，工具函数，供外部使用"""
         game_over = False
         winner = None
-        for player in self.player_dict.get(self.player_num, []):
+        for player in self.getPlayerList():
             is_player_win = True
             goal = (player + 2) % 6 + 1
             for (q, r) in self.home_pos.get(goal, []):
@@ -469,7 +336,7 @@ class ChineseCheckersApp:
                 break
         return game_over, winner
     
-    def getScore(self, board, begin, move, player):
+    def getScoreMove(self, board, begin, move, player):
         goal = (player + 2) % 6 + 1
        
         goal_q, goal_r = self.base_pos.get(goal)
@@ -484,113 +351,32 @@ class ChineseCheckersApp:
         return (move_x-begin_x)*(goal_x - base_x) + (move_y-begin_y)*(goal_y-base_y) \
             + 10 * (math.sqrt((begin_x - goal_x)**2 + (begin_y - goal_y)**2) - math.sqrt((move_x - goal_x)**2 + (move_y - goal_y)**2))
     
+    def getScoreBoard(self, board, player):
+        score = 0
+        goal = (player + 2) % 6 + 1
+        for pos in self.home_pos.get(goal, []):
+            if self.board[pos] == player:
+                score += 10
+        for pos in self.home_pos.get(player, []):
+            if self.board[pos] == player:
+                score -= 5
+        return score
+                
     
     def play(self):
         # print("chess is running...")
-        if self.game_mode == self.GameMode.PVE and self.current_turn in self.ai_list:
+        if self.game_mode == self.GameMode.PVE and self.current_player in self.ai_list:
             if self.ai_ok:
                 self.ai_ok = False
-                self.last_turn, self.current_turn = self.toggleTurn(self.current_turn)
+                self.current_player = self.switchTurn(self.current_player)
         else:
             if self.player_ok:
                 self.player_ok = False
-                self.last_turn, self.current_turn = self.toggleTurn(self.current_turn)
+                self.current_player = self.switchTurn(self.current_player)
         self.game_over, self.winner = self.checkWinner(self.board)
-        self.drawBoard()
         if not self.game_over:
             self.master.after(1, self.play) 
         else:
-            print(f"!!!!!!!!!!!!!!Winner is {self.winner}!!!!!!!!!!!!!!")
+            print(f"!!!!!!!!!!!!!!  Winner is {self.winner}  !!!!!!!!!!!!!!")
 
 
-class MainMenu:
-    def __init__(self, master, sk):
-        self.master = master
-        self.master.title("Chinese Checkers")
-        self.master.geometry("400x600")
-        self.engine = pyttsx3.init()
-        self.sk = sk
-        self.start_button = tk.Button(master, text="开始游戏", command=self.select_game_mode, bg="red", fg="white", width=20, height=3)
-        self.start_button.pack(pady=60)
-        
-        self.instructions_button = tk.Button(master, text="游戏说明", command=self.show_instructions, bg="blue", fg="white", width=20, height=3)
-        self.instructions_button.pack(pady=60)
-        
-        self.exit_button = tk.Button(master, text="退出游戏", command=self.exit_game, bg="gray", fg="white", width=20, height=3)
-        self.exit_button.pack(pady=60)
-
-    def speak(self, text):
-        """使用 pyttsx3 播放语音"""
-        self.engine.say(text)
-        self.engine.runAndWait()
-
-    def select_game_mode(self):
-        """让玩家选择游戏模式：人机对战或玩家对战。"""
-        self.master.withdraw()  # 隐藏主界面
-        mode_window = tk.Toplevel(self.master)
-        mode_window.title("选择游戏模式")
-        mode_window.geometry("300x300")
-        
-        tk.Label(mode_window, text="请选择游戏模式：", font=("Arial", 14)).pack(pady=20)
-        tk.Button(mode_window, text="玩家对战", bg="red", fg="white",
-                  command=lambda: self.start_game(mode_window, ChineseCheckersApp.PlayerNum.FOR2PLAYER, ChineseCheckersApp.GameMode.PVP),
-                  width=20, height=2).pack(pady=10)
-        tk.Button(mode_window, text="人机对战", bg="blue", fg="white",
-                  command=lambda: self.select_ai_difficulty(mode_window), width=20, height=2).pack(pady=30)
-        
-        # 延迟语音提示，确保界面加载完成后播放
-        mode_window.after(500, lambda: self.speak("请选择游戏模式"))
-
-    def select_ai_difficulty(self, parent_window):
-        """选择 AI 的难度级别。"""
-        parent_window.destroy()
-        difficulty_window = tk.Toplevel(self.master)
-        difficulty_window.title("选择AI难度")
-        difficulty_window.geometry("300x300")
-
-        tk.Label(difficulty_window, text="请选择AI难度：", font=("Arial", 14)).pack(pady=20)
-        tk.Button(difficulty_window, text="简单", bg="red", fg="white",
-                  command=lambda: self.start_game(difficulty_window, ChineseCheckersApp.PlayerNum.FOR2PLAYER, ChineseCheckersApp.GameMode.PVE, [4]),
-                  width=20, height=2).pack(pady=10)
-        tk.Button(difficulty_window, text="中等", bg="blue", fg="white",
-                  command=lambda: self.start_game(difficulty_window, ChineseCheckersApp.PlayerNum.FOR2PLAYER, ChineseCheckersApp.GameMode.PVE, [4]),
-                  width=20, height=2).pack(pady=10)
-        tk.Button(difficulty_window, text="困难", bg="green", fg="white",
-                  command=lambda: self.start_game(difficulty_window, ChineseCheckersApp.PlayerNum.FOR2PLAYER, ChineseCheckersApp.GameMode.PVE, [4]),
-                  width=20, height=2).pack(pady=10)
-
-        # 延迟语音提示
-        difficulty_window.after(500, lambda: self.speak("请选择难度"))
-
-    def start_game(self, parent_window, player_num, game_mode, ai_list=[]):
-        """启动游戏窗口，并设置游戏模式和玩家数量。"""
-        parent_window.destroy()
-        game_window = tk.Toplevel(self.master)
-        game_window.title("游戏界面")
-        self.speak("游戏开始")
-        app = ChineseCheckersApp(game_window, player_num=player_num, game_mode=game_mode, ai_list=ai_list)
-        app.play()
-        ai_player1 = MCTSAgent(app, 4)
-        robot_comm = comm(ai_player1, app, self.sk)
-        threading.Thread(target=robot_comm.act, daemon=True).start()
-        threading.Thread(target=ai_player1.run, daemon=True).start()
-
-    def show_instructions(self):
-        rules = """
-        跳棋规则：
-        1. 玩家轮流移动棋子。
-        2. 棋子可以移动到相邻的空格或跳过一颗棋子。
-        3. 首先将所有棋子移动到对面基地者胜。
-        """
-        messagebox.showinfo("游戏说明", rules)
-        self.master.after(500, lambda: self.speak(rules.strip()))
-
-    def exit_game(self):
-        """弹出确认退出窗口"""
-        exit_window = tk.Toplevel(self.master)
-        exit_window.title("退出游戏")
-        exit_window.geometry("300x200")
-        tk.Label(exit_window, text="真的要退出吗？", font=("Arial", 12)).pack(pady=10)
-        tk.Button(exit_window, text="确认", command=self.master.quit, bg="red", fg="white", width=10).pack(side="left", padx=20)
-        tk.Button(exit_window, text="取消", command=exit_window.destroy, bg="green", fg="white", width=10).pack(side="right", padx=20)
-        exit_window.after(500, lambda: self.speak("真的要退出吗"))
