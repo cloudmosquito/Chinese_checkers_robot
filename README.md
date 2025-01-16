@@ -22,7 +22,7 @@
 |  ├─mcts_agent.py            # 基于MCTS算法的AI
 │  └─chinese_checkers_play.py  # 跳棋游戏
 |
-├─RREADME.md                # 说明文档
+├─README.md                # 说明文档
 └─requirements.txt          # 依赖项
 ```
 
